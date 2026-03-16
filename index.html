@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central Supply Room</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body { font-family: Arial; margin:20px; background:#f7f7f7; }
+h1 { text-align:center; color:#2c3e50; }
+
+.tabs { text-align:center; margin-bottom:20px; }
+
+.tablink{
+background:#3498db;
+color:white;
+border:none;
+padding:10px 20px;
+cursor:pointer;
+margin:0 5px;
+border-radius:5px;
+font-size:16px;
+}
+
+.tablink:hover{ background:#2980b9; }
+
+.tabcontent{
+display:none;
+background:white;
+padding:20px;
+border-radius:5px;
+box-shadow:0px 0px 5px #aaa;
+margin-bottom:20px;
+}
+
+form input, form button{
+padding:6px;
+margin:5px;
+border-radius:3px;
+border:1px solid #ccc;
+}
+
+form button{
+background:#27ae60;
+color:white;
+border:none;
+cursor:pointer;
+}
+
+form button:hover{ background:#219150; }
+
+table{
+width:100%;
+border-collapse: collapse;
+margin-top:10px;
+}
+
+table, th, td{ border:1px solid #ccc; }
+
+th, td{
+padding:8px;
+text-align:center;
+}
+
+button.action-btn{
+background:#e74c3c;
+color:white;
+border:none;
+padding:4px 8px;
+cursor:pointer;
+border-radius:3px;
+margin:2px;
+}
+
+button.action-btn:hover{ background:#c0392b; }
+
+button.edit-btn{
+background:#f39c12;
+color:white;
+border:none;
+padding:4px 8px;
+cursor:pointer;
+border-radius:3px;
+margin:2px;
+}
+
+button.edit-btn:hover{ background:#d68910; }
+
+.report-btn{
+background:#8e44ad;
+color:white;
+border:none;
+padding:8px 15px;
+cursor:pointer;
+margin:5px;
+border-radius:5px;
+}
+
+.report-btn:hover{ background:#732d91; }
+</style>
+</head>
+
+<body>
+
+<h1>Central Supply Room System</h1>
+
+<div class="tabs">
+<button class="tablink" onclick="openTab('inventory')">Inventory</button>
+<button class="tablink" onclick="openTab('requests')">Requests</button>
+<button class="tablink" onclick="openTab('reports')">Reports</button>
+<button class="tablink" onclick="openTab('stockReport')">Stock Report</button>
+</div>
+
+<!-- INVENTORY -->
+<div id="inventory" class="tabcontent">
+<h2>Inventory</h2>
+<form id="inventoryForm">
+<input type="hidden" id="invId">
+<input type="text" id="item_name" placeholder="Item Name" required>
+<input type="text" id="category" placeholder="Category / Department" required>
+<input type="number" id="quantity" placeholder="Quantity" required>
+<input type="date" id="purchase_date">
+<button type="submit">Add / Update Supply</button>
+</form>
+
+<table id="inventoryTable">
+<thead>
+<tr>
+<th>ID</th>
+<th>Item</th>
+<th>Category</th>
+<th>Qty</th>
+<th>Date</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+<!-- REQUESTS -->
+<div id="requests" class="tabcontent">
+<h2>Requests</h2>
+<form id="requestForm">
+<input type="hidden" id="reqId">
+<input type="text" id="requester_name" placeholder="Requester Name" required>
+<input type="date" id="req_date">
+<input type="text" id="req_item_name" placeholder="Item Name" required>
+<input type="number" id="req_quantity" placeholder="Quantity" required>
+<input type="text" id="req_desc" placeholder="Description">
+<button type="submit">Add / Update Request</button>
+</form>
+
+<table id="requestsTable">
+<thead>
+<tr>
+<th>ID</th>
+<th>Requester</th>
+<th>Date</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Description</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+<!-- REPORTS -->
+<div id="reports" class="tabcontent">
+<h2>Reports</h2>
+<button class="report-btn" onclick="generateDailyReport()">Daily Report</button>
+<button class="report-btn" onclick="generateMonthlyReport()">Monthly Report</button>
+<button class="report-btn" onclick="downloadRequestPDF()">Download Report PDF</button>
+
+<table id="reportsTable">
+<thead>
+<tr>
+<th>ID</th>
+<th>Requester</th>
+<th>Date</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+<!-- STOCK REPORT -->
+<div id="stockReport" class="tabcontent">
+<h2>Stock Report</h2>
+<button class="report-btn" onclick="generateStockReport()">View Stock</button>
+<button class="report-btn" onclick="downloadStockPDF()">Download Stock PDF</button>
+
+<table id="stockTable">
+<thead>
+<tr>
+<th>ID</th>
+<th>Item</th>
+<th>Category</th>
+<th>Qty Left</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+<script>
+function openTab(tabName){
+document.querySelectorAll('.tabcontent').forEach(tab=>tab.style.display='none');
+document.getElementById(tabName).style.display='block';
+}
+
+openTab('inventory');
+
+let inventoryData=[];
+let requestData=[];
+let nextInvId=1;
+let nextReqId=1;
+
+document.getElementById('req_date').value=new Date().toISOString().substr(0,10);
+
+// --- INVENTORY FORM ---
+document.getElementById('inventoryForm').onsubmit=function(e){
+e.preventDefault();
+let id=document.getElementById('invId').value;
+const item=document.getElementById('item_name').value;
+const cat=document.getElementById('category').value;
+const qty=parseInt(document.getElementById('quantity').value);
+const purchaseDate=document.getElementById('purchase_date').value;
+
+if(id){
+const index=inventoryData.findIndex(i=>i.id==id);
+inventoryData[index]={id:Number(id),item,cat,qty,purchaseDate};
+}else{
+inventoryData.push({id:nextInvId++,item,cat,qty,purchaseDate});
+}
+
+renderInventory();
+this.reset();
+document.getElementById('invId').value='';
+}
+
+// --- INVENTORY RENDER ---
+function renderInventory(){
+const tbody=document.querySelector('#inventoryTable tbody');
+tbody.innerHTML='';
+inventoryData.forEach(row=>{
+tbody.innerHTML+=`
+<tr>
+<td>${row.id}</td>
+<td>${row.item}</td>
+<td>${row.cat}</td>
+<td>${row.qty}</td>
+<td>${row.purchaseDate}</td>
+<td>
+<button class="edit-btn" onclick="editInventory(${row.id})">Edit</button>
+<button class="action-btn" onclick="deleteInventory(${row.id})">Delete</button>
+</td>
+</tr>`;
+});
+}
+
+// --- INVENTORY EDIT ---
+function editInventory(id){
+const inv=inventoryData.find(i=>i.id==id);
+document.getElementById('invId').value=inv.id;
+document.getElementById('item_name').value=inv.item;
+document.getElementById('category').value=inv.cat;
+document.getElementById('quantity').value=inv.qty;
+document.getElementById('purchase_date').value=inv.purchaseDate;
+}
+
+// --- INVENTORY DELETE ---
+function deleteInventory(id){
+if(confirm("Are you sure you want to delete this item?")){
+inventoryData=inventoryData.filter(i=>i.id!=id);
+renderInventory();
+}
+}
+
+// --- REQUEST FORM ---
+document.getElementById('requestForm').onsubmit=function(e){
+e.preventDefault();
+let id=document.getElementById('reqId').value;
+const requester=document.getElementById('requester_name').value;
+const date=document.getElementById('req_date').value;
+const itemName=document.getElementById('req_item_name').value;
+const qty=parseInt(document.getElementById('req_quantity').value);
+const desc=document.getElementById('req_desc').value;
+
+// --- CHECK INVENTORY ---
+const invIndex=inventoryData.findIndex(i=>i.item.toLowerCase()===itemName.toLowerCase());
+if(invIndex===-1){ alert("Item not found in inventory!"); return; }
+if(qty>inventoryData[invIndex].qty){ alert("Not enough stock! Available: "+inventoryData[invIndex].qty); return; }
+
+// --- AUTO DEDUCT STOCK ---
+inventoryData[invIndex].qty -= qty;
+
+if(id){
+const index=requestData.findIndex(r=>r.id==id);
+requestData[index]={id:Number(id),requester,date,item:itemName,qty,desc};
+}else{
+requestData.push({id:nextReqId++,requester,date,item:itemName,qty,desc});
+}
+
+renderInventory();
+renderRequests();
+this.reset();
+document.getElementById('reqId').value='';
+}
+
+// --- REQUEST RENDER ---
+function renderRequests(){
+const tbody=document.querySelector('#requestsTable tbody');
+tbody.innerHTML='';
+requestData.forEach(r=>{
+tbody.innerHTML+=`
+<tr>
+<td>${r.id}</td>
+<td>${r.requester}</td>
+<td>${r.date}</td>
+<td>${r.item}</td>
+<td>${r.qty}</td>
+<td>${r.desc}</td>
+<td>
+<button class="edit-btn" onclick="editRequest(${r.id})">Edit</button>
+<button class="action-btn" onclick="deleteRequest(${r.id})">Delete</button>
+</td>
+</tr>`;
+});
+}
+
+// --- REQUEST EDIT ---
+function editRequest(id){
+const r=requestData.find(i=>i.id==id);
+document.getElementById('reqId').value=r.id;
+document.getElementById('requester_name').value=r.requester;
+document.getElementById('req_date').value=r.date;
+document.getElementById('req_item_name').value=r.item;
+document.getElementById('req_quantity').value=r.qty;
+document.getElementById('req_desc').value=r.desc;
+}
+
+// --- REQUEST DELETE ---
+function deleteRequest(id){
+if(confirm("Are you sure you want to delete this request?")){
+requestData=requestData.filter(r=>r.id!=id);
+renderRequests();
+}
+}
+
+// --- REPORTS ---
+function generateDailyReport(){
+const today=new Date().toISOString().substr(0,10);
+renderReport(requestData.filter(r=>r.date===today));
+}
+function generateMonthlyReport(){
+const month=new Date().toISOString().substr(0,7);
+renderReport(requestData.filter(r=>r.date.startsWith(month)));
+}
+function renderReport(data){
+const tbody=document.querySelector('#reportsTable tbody');
+tbody.innerHTML='';
+data.forEach(r=>{
+tbody.innerHTML+=`
+<tr>
+<td>${r.id}</td>
+<td>${r.requester}</td>
+<td>${r.date}</td>
+<td>${r.item}</td>
+<td>${r.qty}</td>
+<td>${r.desc}</td>
+</tr>`;
+});
+}
+
+// --- STOCK REPORT ---
+function generateStockReport(){
+const tbody=document.querySelector('#stockTable tbody');
+tbody.innerHTML='';
+inventoryData.forEach(row=>{
+tbody.innerHTML+=`
+<tr>
+<td>${row.id}</td>
+<td>${row.item}</td>
+<td>${row.cat}</td>
+<td>${row.qty}</td>
+<td>${row.purchaseDate}</td>
+</tr>`;
+});
+}
+
+// --- DOWNLOAD PDFs ---
+function downloadStockPDF(){
+const { jsPDF } = window.jspdf;
+const doc=new jsPDF();
+doc.text("Central Supply Room - Stock Report",20,20);
+let y=30;
+inventoryData.forEach(r=>{
+doc.text(`${r.id} | ${r.item} | ${r.cat} | Qty:${r.qty}`,20,y);
+y+=10;
+});
+doc.save("Stock_Report.pdf");
+}
+function downloadRequestPDF(){
+const { jsPDF } = window.jspdf;
+const doc=new jsPDF();
+doc.text("Central Supply Room - Request Report",20,20);
+let y=30;
+requestData.forEach(r=>{
+doc.text(`${r.id} | ${r.requester} | ${r.item} | Qty:${r.qty}`,20,y);
+y+=10;
+});
+doc.save("Request_Report.pdf");
+}
+</script>
+
+</body>
+</html>
